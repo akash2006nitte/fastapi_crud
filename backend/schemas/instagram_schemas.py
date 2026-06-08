@@ -26,7 +26,7 @@ class UserResponse(UserBase):
 
 
 class PostCreate(BaseModel):
-    user_id: int
+    user_id: int | None = None
     image_url: str
     caption: str | None = None
 
@@ -43,7 +43,7 @@ class PostResponse(BaseModel):
 
 
 class CommentCreate(BaseModel):
-    user_id: int
+    user_id: int | None = None
     text: str
 
 

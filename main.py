@@ -1,12 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers.instagram_router import instagram_router
-from routers.auth_router import auth_router
-from routers.media_router import router as media_router
-from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
+# Allow local frontend during development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"],
@@ -16,12 +14,6 @@ app.add_middleware(
 )
 
 app.include_router(instagram_router)
-app.include_router(auth_router)
-app.include_router(media_router)
-
-# serve uploaded images
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 
 @app.get("/")
 async def root():

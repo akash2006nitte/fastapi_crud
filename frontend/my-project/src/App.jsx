@@ -1,121 +1,204 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useEffect, useState } from 'react'
 import './App.css'
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [users, setUsers] = useState([])
+  const [posts, setPosts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showNew, setShowNew] = useState(false)
+  const [form, setForm] = useState({ user_id: '', image_url: '', caption: '' })
+  const [token, setToken] = useState(localStorage.getItem('token') || null)
+  const [showLogin, setShowLogin] = useState(false)
+  const [showSignup, setShowSignup] = useState(false)
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' })
+  const [signupForm, setSignupForm] = useState({ username: '', email: '', password: '' })
+  const [file, setFile] = useState(null)
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const [uRes, pRes] = await Promise.all([fetch(`${API}/users/`), fetch(`${API}/posts/`)])
+      const users = await uRes.json()
+      const posts = await pRes.json()
+      setUsers(users)
+      setPosts(posts)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const userMap = Object.fromEntries((users || []).map((u) => [u.id, u.username || u.name || '']))
+
+  async function submitNew(e) {
+    e.preventDefault()
+    let imageUrl = form.image_url
+    // if file selected, upload first
+    if (file) {
+      const fd = new FormData()
+      fd.append('file', file)
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      const up = await fetch(`${API}/media/upload`, { method: 'POST', body: fd, headers })
+      if (!up.ok) return alert('Upload failed')
+      const jd = await up.json()
+      imageUrl = jd.url
+    }
+
+    const body = { user_id: form.user_id ? Number(form.user_id) : undefined, image_url: imageUrl, caption: form.caption }
+    const headers = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    const res = await fetch(`${API}/posts/`, { method: 'POST', headers, body: JSON.stringify(body) })
+    if (res.ok) {
+      const newPost = await res.json()
+      setPosts((p) => [newPost, ...p])
+      setShowNew(false)
+      setForm({ user_id: '', image_url: '', caption: '' })
+      setFile(null)
+    } else {
+      alert('Failed to create post')
+    }
+  }
+
+  async function doLogin(e) {
+    e.preventDefault()
+    const fd = new URLSearchParams()
+    fd.append('username', loginForm.username)
+    fd.append('password', loginForm.password)
+    const res = await fetch(`${API}/auth/token`, { method: 'POST', body: fd })
+    if (!res.ok) return alert('Login failed')
+    const jd = await res.json()
+    setToken(jd.access_token)
+    localStorage.setItem('token', jd.access_token)
+    setShowLogin(false)
+  }
+
+  async function doSignup(e) {
+    e.preventDefault()
+    const params = new URLSearchParams()
+    params.append('username', signupForm.username)
+    params.append('email', signupForm.email)
+    params.append('password', signupForm.password)
+    const res = await fetch(`${API}/auth/register?${params.toString()}`, { method: 'POST' })
+    if (!res.ok) return alert('Signup failed')
+    setShowSignup(false)
+    setShowLogin(true)
+    setSignupForm({ username: '', email: '', password: '' })
+    alert('Account created. You can sign in now.')
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <div className="app">
+      <header className="topbar">
+        <h1>InstaClone</h1>
+        <div className="top-actions">
+          <button className="btn" onClick={() => setShowNew(true)}>New Post</button>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+      </header>
 
-      <div className="ticks"></div>
+      <main className="container">
+        <aside className="sidebar">
+          <div className="profile-card">
+            <h3>Users</h3>
+            {users.map((u) => (
+              <div key={u.id} className="user-line">{u.username || u.full_name || u.email}</div>
+            ))}
+            <div style={{marginTop:8}}>
+              {!token ? (
+                <div className="auth-actions">
+                  <button className="btn" onClick={() => setShowLogin(true)}>Sign in</button>
+                  <button className="btn muted" onClick={() => setShowSignup(true)}>Sign up</button>
+                </div>
+              ) : (
+                <button className="btn" onClick={() => { setToken(null); localStorage.removeItem('token') }}>Logout</button>
+              )}
+            </div>
+          </div>
+          <div className="about">
+            <h4>About</h4>
+            <p>Simple Instagram-like frontend built for the FastAPI example.</p>
+          </div>
+        </aside>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+        <section className="feed">
+          {loading ? <div className="loader">Loading...</div> : posts.length === 0 ? <div>No posts yet</div> : null}
+          {posts.map((post) => (
+            <article key={post.id} className="post-card">
+              <div className="post-header">
+                <div className="avatar">{(userMap[post.user_id] || 'User')[0]?.toUpperCase()}</div>
+                <div>
+                  <div className="username">{userMap[post.user_id] || 'User'}</div>
+                  <div className="meta">{new Date(post.created_at).toLocaleString()}</div>
+                </div>
+              </div>
+              <div className="post-image">
+                <img src={post.image_url} alt={post.caption || 'image'} />
+              </div>
+              <div className="post-body">
+                <p className="caption"><strong>{userMap[post.user_id] || 'User'}</strong> {post.caption}</p>
+              </div>
+            </article>
+          ))}
+        </section>
+      </main>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {showNew && (
+        <div className="modal">
+          <form className="modal-card" onSubmit={submitNew}>
+            <h3>New Post</h3>
+            <label>User</label>
+            <select value={form.user_id} onChange={(e) => setForm({ ...form, user_id: e.target.value })}>
+              <option value="">Select user</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.username || u.full_name || u.email}</option>)}
+            </select>
+            <label>Image URL</label>
+            <input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} placeholder="https://..." />
+            <label>Or upload image</label>
+            <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files[0])} />
+            <label>Caption</label>
+            <textarea value={form.caption} onChange={(e) => setForm({ ...form, caption: e.target.value })} />
+            <div className="modal-actions">
+              <button type="button" className="btn muted" onClick={() => setShowNew(false)}>Cancel</button>
+              <button type="submit" className="btn primary">Post</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showLogin && (
+        <div className="modal">
+          <form className="modal-card" onSubmit={doLogin}>
+            <h3>Sign in</h3>
+            <label>Username or email</label>
+            <input value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} required />
+            <label>Password</label>
+            <input type="password" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} required />
+            <div className="modal-actions">
+              <button type="button" className="btn muted" onClick={() => setShowLogin(false)}>Cancel</button>
+              <button type="submit" className="btn primary">Sign in</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showSignup && (
+        <div className="modal">
+          <form className="modal-card" onSubmit={doSignup}>
+            <h3>Sign up</h3>
+            <label>Username</label>
+            <input value={signupForm.username} onChange={(e) => setSignupForm({ ...signupForm, username: e.target.value })} required />
+            <label>Email</label>
+            <input type="email" value={signupForm.email} onChange={(e) => setSignupForm({ ...signupForm, email: e.target.value })} required />
+            <label>Password</label>
+            <input type="password" value={signupForm.password} onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })} required />
+            <div className="modal-actions">
+              <button type="button" className="btn muted" onClick={() => setShowSignup(false)}>Cancel</button>
+              <button type="submit" className="btn primary">Create account</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
   )
 }
 

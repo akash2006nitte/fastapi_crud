@@ -1,13 +1,13 @@
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, or_
 
-from database import Base, SessionLocal, engine
+from database import Base, SessionLocal, ensure_schema
 from models.user_models import Comment, Follow, Like, Post, User
 
 
 class InstagramRepository:
     def __init__(self):
-        Base.metadata.create_all(bind=engine)
+        ensure_schema()
 
     def _get_session(self):
         return SessionLocal()
@@ -18,9 +18,9 @@ class InstagramRepository:
     def _post_exists(self, session, post_id: int) -> bool:
         return session.get(Post, post_id) is not None
 
-    def create_user(self, username: str, email: str, full_name: str | None = None, bio: str | None = None):
+    def create_user(self, username: str, email: str, password_hash: str | None = None, full_name: str | None = None, bio: str | None = None):
         with self._get_session() as session:
-            user = User(username=username, email=email, full_name=full_name, bio=bio)
+            user = User(username=username, email=email, hashed_password=password_hash, full_name=full_name, bio=bio)
             session.add(user)
             session.commit()
             session.refresh(user)

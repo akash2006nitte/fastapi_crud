@@ -1,12 +1,12 @@
 from sqlalchemy.exc import IntegrityError
 
-from database import Base, SessionLocal, engine
+from database import Base, SessionLocal, ensure_schema
 from models.user_models import User
 
 
 class UserRepository:
     def __init__(self):
-        Base.metadata.create_all(bind=engine)
+        ensure_schema()
 
     def _get_session(self):
         return SessionLocal()

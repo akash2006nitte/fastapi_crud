@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.exc import IntegrityError
 
+from auth import get_current_user
 from repository.instagram_repository import InstagramRepository
 from schemas.instagram_schemas import CommentCreate, CommentResponse, PostCreate, PostResponse, UserCreate, UserResponse, UserUpdate
 
@@ -11,7 +12,7 @@ repo = InstagramRepository()
 @instagram_router.post("/users/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(user: UserCreate):
     try:
-        return repo.create_user(user.username, user.email, user.full_name, user.bio)
+        return repo.create_user(user.username, user.email, None, user.full_name, user.bio)
     except IntegrityError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username or email already exists")
 
@@ -48,8 +49,9 @@ async def delete_user(user_id: int):
 
 
 @instagram_router.post("/posts/", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
-async def create_post(post: PostCreate):
-    new_post = repo.create_post(post.user_id, post.image_url, post.caption)
+async def create_post(post: PostCreate, current_user=Depends(get_current_user)):
+    user_id = post.user_id or current_user.id
+    new_post = repo.create_post(user_id, post.image_url, post.caption)
     if not new_post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return new_post
@@ -77,8 +79,9 @@ async def list_user_posts(user_id: int):
 
 
 @instagram_router.post("/posts/{post_id}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
-async def add_comment(post_id: int, comment: CommentCreate):
-    new_comment = repo.add_comment(post_id, comment.user_id, comment.text)
+async def add_comment(post_id: int, comment: CommentCreate, current_user=Depends(get_current_user)):
+    user_id = comment.user_id or current_user.id
+    new_comment = repo.add_comment(post_id, user_id, comment.text)
     if not new_comment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post or user not found")
     return new_comment
@@ -93,31 +96,32 @@ async def list_comments(post_id: int):
 
 
 @instagram_router.post("/posts/{post_id}/likes")
-async def like_post(post_id: int, user_id: int):
-    if repo.like_post(post_id, user_id):
+async def like_post(post_id: int, current_user=Depends(get_current_user)):
+    if repo.like_post(post_id, current_user.id):
         return {"message": "Post liked"}
     raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Post already liked or not found")
 
 
 @instagram_router.delete("/posts/{post_id}/likes")
-async def unlike_post(post_id: int, user_id: int):
-    if repo.unlike_post(post_id, user_id):
+async def unlike_post(post_id: int, current_user=Depends(get_current_user)):
+    if repo.unlike_post(post_id, current_user.id):
         return {"message": "Post unliked"}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Like not found")
 
 
 @instagram_router.post("/users/{follower_id}/follow/{followed_id}")
-async def follow_user(follower_id: int, followed_id: int):
-    if follower_id == followed_id:
+async def follow_user(follower_id: int, followed_id: int, current_user=Depends(get_current_user)):
+    # ignore path follower_id, use authenticated user
+    if current_user.id == followed_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot follow yourself")
-    if repo.follow_user(follower_id, followed_id):
+    if repo.follow_user(current_user.id, followed_id):
         return {"message": "User followed"}
     raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already following or user not found")
 
 
 @instagram_router.delete("/users/{follower_id}/follow/{followed_id}")
-async def unfollow_user(follower_id: int, followed_id: int):
-    if repo.unfollow_user(follower_id, followed_id):
+async def unfollow_user(follower_id: int, followed_id: int, current_user=Depends(get_current_user)):
+    if repo.unfollow_user(current_user.id, followed_id):
         return {"message": "User unfollowed"}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Follow relationship not found")
 
