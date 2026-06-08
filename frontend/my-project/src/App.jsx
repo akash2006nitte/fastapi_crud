@@ -3,6 +3,17 @@ import './App.css'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+function decodeJwtPayload(token) {
+  try {
+    const payload = token.split('.')[1]
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+    return JSON.parse(atob(padded))
+  } catch {
+    return null
+  }
+}
+
 function App() {
   const [users, setUsers] = useState([])
   const [posts, setPosts] = useState([])
@@ -30,6 +41,8 @@ function App() {
   }, [])
 
   const userMap = Object.fromEntries((users || []).map((u) => [u.id, u.username || u.name || '']))
+  const currentUserId = token ? Number(decodeJwtPayload(token)?.sub) : null
+  const currentUserLabel = currentUserId ? userMap[currentUserId] || `User #${currentUserId}` : ''
 
   async function submitNew(e) {
     e.preventDefault()
@@ -45,7 +58,7 @@ function App() {
       imageUrl = jd.url
     }
 
-    const body = { user_id: form.user_id ? Number(form.user_id) : undefined, image_url: imageUrl, caption: form.caption }
+    const body = { user_id: currentUserId || undefined, image_url: imageUrl, caption: form.caption }
     const headers = { 'Content-Type': 'application/json' }
     if (token) headers['Authorization'] = `Bearer ${token}`
     const res = await fetch(`${API}/posts/`, { method: 'POST', headers, body: JSON.stringify(body) })
@@ -75,11 +88,15 @@ function App() {
 
   async function doSignup(e) {
     e.preventDefault()
+    const fd = new FormData()
+    fd.append('username', signupForm.username)
+    fd.append('email', signupForm.email)
+    fd.append('password', signupForm.password)
     const params = new URLSearchParams()
     params.append('username', signupForm.username)
     params.append('email', signupForm.email)
     params.append('password', signupForm.password)
-    const res = await fetch(`${API}/auth/register?${params.toString()}`, { method: 'POST' })
+    const res = await fetch(`${API}/auth/register?${params.toString()}`, { method: 'POST', body: fd })
     if (!res.ok) return alert('Signup failed')
     setShowSignup(false)
     setShowLogin(true)
@@ -146,11 +163,10 @@ function App() {
         <div className="modal">
           <form className="modal-card" onSubmit={submitNew}>
             <h3>New Post</h3>
-            <label>User</label>
-            <select value={form.user_id} onChange={(e) => setForm({ ...form, user_id: e.target.value })}>
-              <option value="">Select user</option>
-              {users.map((u) => <option key={u.id} value={u.id}>{u.username || u.full_name || u.email}</option>)}
-            </select>
+            <div className="posting-as">
+              <span className="posting-label">Posting as</span>
+              <strong>{currentUserLabel || 'Sign in to post'}</strong>
+            </div>
             <label>Image URL</label>
             <input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} placeholder="https://..." />
             <label>Or upload image</label>
@@ -177,6 +193,9 @@ function App() {
               <button type="button" className="btn muted" onClick={() => setShowLogin(false)}>Cancel</button>
               <button type="submit" className="btn primary">Sign in</button>
             </div>
+            <button type="button" className="btn muted" onClick={() => { setShowLogin(false); setShowSignup(true) }} style={{ marginTop: 12 }}>
+              Need an account? Sign up
+            </button>
           </form>
         </div>
       )}
@@ -195,6 +214,9 @@ function App() {
               <button type="button" className="btn muted" onClick={() => setShowSignup(false)}>Cancel</button>
               <button type="submit" className="btn primary">Create account</button>
             </div>
+            <button type="button" className="btn muted" onClick={() => { setShowSignup(false); setShowLogin(true) }} style={{ marginTop: 12 }}>
+              Already have an account? Sign in
+            </button>
           </form>
         </div>
       )}

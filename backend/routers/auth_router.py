@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from auth import create_access_token, get_password_hash, verify_password, repo
@@ -7,7 +7,11 @@ auth_router = APIRouter(prefix="/auth")
 
 
 @auth_router.post("/register")
-def register(username: str, email: str, password: str):
+def register(
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+):
     hashed = get_password_hash(password)
     try:
         user = repo.create_user(username, email, password_hash=hashed)
